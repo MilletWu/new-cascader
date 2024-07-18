@@ -13,6 +13,8 @@ export interface CascaderProps {
   inputPlaceholder: string
   // 是否开启搜索
   filterable: boolean
+  // 自定义面板高度, 需要带单位
+  panelHeight: string
 }
 
 // 数组中每个对象的参数配置
@@ -32,6 +34,8 @@ export interface CascaderPanelProps {
   props?: Props
   // 数据
   options?: CascaderOption[]
+  // 自定义面板高度, 需要带单位
+  panelHeight: string
 }
 // 配置项
 interface Props {}

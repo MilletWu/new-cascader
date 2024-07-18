@@ -6,16 +6,21 @@
     @keydown.stop="handleKeyDown"
     tabindex="0"
     ref="cascaderPanelRef"
+    @mouseenter="handleMouseenter"
+    @mouseleave="handleMouseleave"
   >
-    <div class="cascader-panel-container">
-      <ul class="scrollable" ref="listRef">
+    <div class="cascader-panel-container" :style="{ height: panelHeight }">
+      <ul class="scrollable" :class="{ 'scrollable-hidden': !scrollbarVisible }" ref="listRef">
         <li
           v-for="(item, index) in options"
-          :class="{ active: item.selected, hover: currentIndex == index && isFocus }"
+          :class="{
+            active: item.selected,
+            hover: currentIndex == index && isFocus,
+            disabled: item.disabled
+          }"
           :key="item.value"
           @click="() => handleSelected(item, index)"
           @dblclick="() => handleSubmit(item)"
-          disabled="true"
         >
           <i v-if="item.checked" class="icon-checked-box iconfont icon-checked"></i>
           <span>{{ item.value }}</span>
@@ -47,14 +52,19 @@ let currentIndex = ref(0)
 const currentItem = computed(() => {
   return props.options[currentIndex.value]
 })
+// 滚动条是否可见
+const scrollbarVisible = ref(false)
+
 // 选择数据
 const handleSelected = (item: CascaderOption, index?: number) => {
+  if (item.disabled) return
   currentIndex.value = index || props.options.indexOf(item)
 
   emits('addPanel', item)
 }
 // 提交数据
 const handleSubmit = (item: CascaderOption) => {
+  if (item.disabled) return
   emits('submitData', item)
 }
 // 键盘事件处理
@@ -90,12 +100,24 @@ const handleKeyDown = (e: KeyboardEvent) => {
 // index 处理和限制
 const indexCount = (num: number) => {
   let max = props.options.length - 1
+
   currentIndex.value += num
+
   if (currentIndex.value > max) {
     currentIndex.value = max
   }
   if (currentIndex.value < 0) {
     currentIndex.value = 0
+  }
+
+  if (currentItem.value.disabled) {
+    if (currentIndex.value == max && num > 0) {
+      indexCount(-num)
+    } else if (currentIndex.value == 0 && num < 0) {
+      indexCount(1)
+    } else {
+      indexCount(num)
+    }
   }
 }
 // 设置滚动高度
@@ -116,6 +138,14 @@ const hanleFocus = () => {
 const handleBlur = () => {
   isFocus.value = false
 }
+// 鼠标移入
+const handleMouseenter = () => {
+  scrollbarVisible.value = true
+}
+// 鼠标移除
+const handleMouseleave = () => {
+  scrollbarVisible.value = false
+}
 </script>
 
 <style lang="scss" scoped>
@@ -125,8 +155,9 @@ $active-color: #409eff;
   position: relative;
   outline: none;
   .cascader-panel-container {
-    width: 180px;
-    height: 204px;
+    // width: 180px;
+    min-width: 180px;
+    min-height: 204px;
     background-color: #fff;
     box-sizing: border-box;
     position: relative;
@@ -139,17 +170,17 @@ $active-color: #409eff;
     ul {
       margin: 0;
       padding: 6px 0;
-      width: 100%;
       height: 100%;
       box-sizing: border-box;
       overflow: auto;
       outline: none;
+
       li {
         position: relative;
         display: flex;
         align-items: center;
         // justify-content: space-between;
-        padding: 0 30px 0 20px;
+        padding: 0 18px 0 20px;
         height: 34px;
         line-height: 34px;
         outline: none;
@@ -158,6 +189,11 @@ $active-color: #409eff;
         }
         span {
           padding: 0 8px;
+          box-sizing: border-box;
+          // width: fit-content;
+          overflow: hidden; /* 隐藏溢出的内容 */
+          white-space: nowrap; /* 不换行 */
+          text-overflow: ellipsis; /* 使用省略号显示溢出的内容 */
         }
         .icon-checked-box {
           font-size: 12px;
@@ -177,6 +213,11 @@ $active-color: #409eff;
           font-weight: 600;
         }
       }
+      .disabled {
+        color: #a8abb2 !important;
+        // 禁用
+        cursor: not-allowed !important;
+      }
     }
   }
 }
@@ -185,10 +226,11 @@ li {
   list-style: none;
 }
 /*定义滚动条高宽及背景 高宽分别对应横竖滚动条的尺寸*/
+
 .scrollable::-webkit-scrollbar {
   width: 6px;
   // height: 148px;
-  // background-color: #f5f5f5;
+  // background-color: red;
 }
 
 /*定义滚动条轨道 内阴影+圆角*/
@@ -205,5 +247,8 @@ li {
 
   // -webkit-box-shadow: inset 0 0 6px #dddee0;
   background-color: rgba(221, 222, 224, 0.8);
+}
+.scrollable-hidden::-webkit-scrollbar {
+  display: none;
 }
 </style>

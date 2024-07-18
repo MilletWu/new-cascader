@@ -35,6 +35,7 @@
       <div class="panel-list-box" v-show="hasOPen">
         <div class="panel-list-container" ref="panelListRef">
           <CascaderPanel
+            :panelHeight="panelHeight"
             :options="panelOptions"
             @addPanel="addPanel"
             @submitData="submitData"
@@ -45,6 +46,7 @@
           <template v-for="panelItem in paneShowlList" :key="panelItem.label">
             <CascaderPanel
               :options="panelItem.children"
+              :panelHeight="panelHeight"
               @addPanel="addPanel"
               @submitData="submitData"
               @arrowLeft="handlePanelKeydown"
@@ -75,7 +77,8 @@ const props = withDefaults(defineProps<CascaderProps>(), {
   separator: '/',
   // input占位符
   inputPlaceholder: '请选择',
-  filterable: false
+  filterable: false,
+  panelHeight: '200px'
 })
 const emits = defineEmits(['update:modelValue', 'finally', 'change', 'close'])
 // 数据添加层级标识

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
-import Cascader from './cascader/cascader-main.vue'
+import { reactive, ref } from 'vue'
+import Cascader from './cascader/main.vue'
 
 const options = reactive([
   {
     value: 'guide',
     label: 'Guide',
+    disabled: true,
     children: [
       {
         value: 'disciplines',
@@ -32,6 +33,7 @@ const options = reactive([
       {
         value: 'navigation',
         label: 'Navigation',
+        disabled: true,
         children: [
           {
             value: 'side nav',
@@ -48,6 +50,7 @@ const options = reactive([
   {
     value: 'component',
     label: 'Component',
+
     children: [
       {
         value: 'basic',
@@ -140,6 +143,7 @@ const options = reactive([
       {
         value: 'data',
         label: 'Data',
+        disabled: true,
         children: [
           {
             value: 'table',
@@ -254,6 +258,7 @@ const options = reactive([
   {
     value: 'resource',
     label: 'Resource',
+    disabled: true,
     children: [
       {
         value: 'axure',
@@ -289,6 +294,7 @@ const close = () => {
     separator="-"
     :clearable="true"
     v-model="inputValue"
+    panel-height="600px"
     @change="change"
     @finally="finallyx"
     @close="close"
