@@ -1,0 +1,30 @@
+{
+  "id": "4622595",
+  "name": "demo",
+  "font_family": "iconfont",
+  "css_prefix_text": "icon-",
+  "description": "",
+  "glyphs": [
+    {
+      "icon_id": "5858547",
+      "name": "选中",
+      "font_class": "checked",
+      "unicode": "e664",
+      "unicode_decimal": 58980
+    },
+    {
+      "icon_id": "2076424",
+      "name": "箭头",
+      "font_class": "arrow",
+      "unicode": "e8d4",
+      "unicode_decimal": 59604
+    },
+    {
+      "icon_id": "22270140",
+      "name": "清空",
+      "font_class": "clear",
+      "unicode": "e622",
+      "unicode_decimal": 58914
+    }
+  ]
+}
