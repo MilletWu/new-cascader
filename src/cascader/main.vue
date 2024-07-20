@@ -42,16 +42,22 @@
             @arrowLeft="handlePanelKeydown"
             @arrowRight="handlePanelKeydown"
             @enterSubmit="enterSubmit"
+            :lazy="lazy"
+            :lazyLoad="lazyLoad"
+            :lazy-call-back="lazyCallBack"
           />
           <template v-for="panelItem in paneShowlList" :key="panelItem.label">
             <CascaderPanel
-              :options="panelItem.children"
+              :options="panelItem[childrenKey]"
               :panelHeight="panelHeight"
               @addPanel="addPanel"
               @submitData="submitData"
               @arrowLeft="handlePanelKeydown"
               @arrowRight="handlePanelKeydown"
               @enterSubmit="enterSubmit"
+              :lazy="lazy"
+              :lazyLoad="lazyLoad"
+              :lazy-call-back="lazyCallBack"
             />
           </template>
         </div>
@@ -78,22 +84,31 @@ const props = withDefaults(defineProps<CascaderProps>(), {
   // input占位符
   inputPlaceholder: '请选择',
   filterable: false,
-  panelHeight: '200px'
+  panelHeight: '200px',
+  lazy: false,
+  setProps: () => ({
+    valueKey: 'value',
+    lableKey: 'label',
+    childrenKey: 'children'
+  })
 })
+const { valueKey, lableKey, childrenKey } = props.setProps
 const emits = defineEmits(['update:modelValue', 'finally', 'change', 'close'])
 // 数据添加层级标识
+const newOptions = reactive(props.options)
+
 const panelOptions = computed(() => {
-  // props.options
-  let newOptions = addSelectedField(props.options)
-  return reactive(addLevel(newOptions))
+  let options = addLevel(addSelectedField(newOptions))
+  return reactive(options)
 })
+
 // 面板列表
 const panelList = reactive<CascaderOption[]>([])
 // 面板dom
 const panelListRef = ref()
 // 展示面板列表
 const paneShowlList = computed(() => {
-  return panelList.filter((item) => item?.children)
+  return panelList.filter((item) => item[childrenKey]?.length)
 })
 // 保存面板值
 const hasOpenValue = ref(false)
@@ -103,10 +118,11 @@ const hasOPen = computed({
     return hasOpenValue.value
   },
   set(v) {
-    hasOpenValue.value = v
-    if (!hasOpenValue.value) {
+    if (hasOPen.value == v) return
+    if (!v) {
       emits('close')
     }
+    hasOpenValue.value = v
   }
 })
 
@@ -122,21 +138,23 @@ const inputRef = ref<HTMLInputElement>()
 let hasInputHover = ref(false)
 
 // 旧的选中对象
-let oldChecked: CascaderOption = { value: '', label: '', checked: false }
+let oldChecked: CascaderOption = { [valueKey]: '', [lableKey]: '', checked: false }
 
 // 是否显示清空
 const hasClear = computed(() => {
   // props.clear是否存在，是否为true,input-box是否触发hover,input是否存在值
   return props.clearable && inputValue.value && hasInputHover.value
 })
+const resultData = reactive({})
+
 const inputValue = computed({
   get() {
     return props.modelValue
   },
   set(v) {
-    emits('finally', { newVal: v })
+    emits('finally', { newVal: resultData })
     if (v !== inputValue.value) {
-      emits('change', { newVal: v })
+      emits('change', { newVal: resultData })
       emits('update:modelValue', v)
     }
   }
@@ -199,14 +217,21 @@ const submitData = (panelItem: CascaderOption) => {
   oldChecked.checked = false
   panelItem.checked = true
   oldChecked = panelItem
-  let newData = ''
-  let separator = ` ${props.separator} `
+  let newData = {
+    [valueKey + 'List']: [] as any,
+    [lableKey]: ''
+  }
+
+  let separator = `${props.separator}`
   panelList.forEach((item) => {
-    newData += item.value + separator
+    newData[valueKey + 'List'].push(item[valueKey])
+    newData[lableKey] += item[lableKey] + separator
   })
+
   // 去掉末尾的分隔符
-  newData = newData.slice(0, newData.lastIndexOf(separator))
-  inputValue.value = newData
+  newData[lableKey] = newData[lableKey].slice(0, newData[lableKey].lastIndexOf(separator))
+  Object.assign(resultData, newData)
+  inputValue.value = newData[lableKey]
   // 关闭面板列表
   hasOPen.value = false
   // 聚焦到面板
@@ -220,38 +245,43 @@ const enterSubmit = ({ currentItem }: { currentItem: CascaderOption }) => {
   submitData(currentItem)
 }
 type keydown = {
-  direction?: string
-  currentItem?: CascaderOption
+  direction: string
+  currentItem: CascaderOption
 }
 // 当前组件键盘事件处理
 const handleKeydown = (e: KeyboardEvent) => {
   if (e.key == 'ArrowDown') {
     hasOPen.value = true
     nextTick(() => {
-      panelListRef.value.children[0].focus()
+      panelListRef.value[childrenKey][0]?.focus()
     })
   }
 }
 // 面板键盘事件处理
 const handlePanelKeydown = ({ direction, currentItem }: keydown) => {
   const currentIndex = (currentItem.level as number) - 1
-  let newxIndex = currentIndex
+  let newIndex = currentIndex
   // 有子元素则能往右聚焦
-  let hasRight = currentItem.children ? true : false
+  let hasRight = currentItem[childrenKey]?.length ? true : false
   // 层级不是第一层则能往左聚焦
   let hasLeft = currentItem.level != 1 ? true : false
 
   switch (direction) {
     case 'left':
       if (!hasLeft) break
-      newxIndex -= 1
+      newIndex -= 1
+      resetSelected(newIndex)
       break
     case 'right':
       if (!hasRight) break
-      newxIndex += 1
+      newIndex += 1
       break
   }
-  const nextFocusItem = panelListRef.value.children[newxIndex]
+
+  // 如果index没有变化则返回
+  if (newIndex == currentIndex) return
+
+  const nextFocusItem = panelListRef.value[childrenKey][newIndex]
   nextTick(() => {
     nextFocusItem.focus()
   })

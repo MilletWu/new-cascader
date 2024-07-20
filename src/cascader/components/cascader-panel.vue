@@ -1,7 +1,7 @@
 <template>
   <div
     class="cascader-panel"
-    @focus="hanleFocus"
+    @focusin="hanleFocus"
     @blur="handleBlur"
     @keydown.stop="handleKeyDown"
     tabindex="0"
@@ -19,12 +19,15 @@
             disabled: item.disabled
           }"
           :key="item.value"
-          @click="() => handleSelected(item, index)"
-          @dblclick="() => handleSubmit(item)"
+          @click="() => clickSelected(item, index)"
+          @dblclick="() => doubleClickSubmit(item)"
         >
           <i v-if="item.checked" class="icon-checked-box iconfont icon-checked"></i>
-          <span>{{ item.value }}</span>
-          <i v-if="item.children" class="arrow-icon-box iconfont icon-arrow"></i>
+          <span>{{ item.label }}</span>
+          <div class="btn-box">
+            <i v-if="!item.leaf && !item.loading" class="arrow-icon-box iconfont icon-arrow"></i>
+            <i v-if="item.loading && !item.leaf && lazy == true" class="iconfont icon-loading"></i>
+          </div>
         </li>
       </ul>
     </div>
@@ -35,6 +38,8 @@
 import '../icon-class/iconfont.css'
 import { CascaderPanelProps, CascaderOption } from '../main'
 import { ref, computed, nextTick } from 'vue'
+import { addLevel } from '../utils/index.ts'
+import { useClickHandler } from '../utils/clickhandle.ts'
 const emits = defineEmits(['addPanel', 'submitData', 'arrowLeft', 'arrowRight', 'enterSubmit'])
 const props = withDefaults(defineProps<CascaderPanelProps>(), {})
 
@@ -47,6 +52,7 @@ const isFocus = ref(false)
 
 // 当前选中的下标
 let currentIndex = ref(0)
+let oldIndex = ref(-1)
 
 // 当前选中的元素
 const currentItem = computed(() => {
@@ -54,31 +60,68 @@ const currentItem = computed(() => {
 })
 // 滚动条是否可见
 const scrollbarVisible = ref(false)
+// 处理单击和双击冲突
+const [clickSelected, doubleClickSubmit] = useClickHandler(
+  (item: CascaderOption, index?: number) => handleSelected(item, index),
+  (item: CascaderOption) => handleSubmit(item),
+  50
+)
 
 // 选择数据
 const handleSelected = (item: CascaderOption, index?: number) => {
-  if (item.disabled) return
-  currentIndex.value = index || props.options.indexOf(item)
+  if (item?.disabled) return
+  const newIndex = index || props.options.indexOf(item)
 
+  oldIndex.value = currentIndex.value
+  currentIndex.value = newIndex
+  // 懒加载处理函数
+  handleLazy(item)
   emits('addPanel', item)
+}
+
+// 懒加载处理函数
+const handleLazy = (item: CascaderOption) => {
+  // 懒加载
+  if (props.lazy && props.lazyLoad && !item?.leaf) {
+    // 请求到子数组
+    item.loading = true
+    props.lazyLoad(item).then(
+      (children: CascaderOption[]) => {
+        // 如果传递了懒加载返回函数则用户控制数据添加，返回的值是当前对象和处理完格式的请求值
+        if (props.lazyCallBack) {
+          props.lazyCallBack(item, addLevel(children, (item.level as number) + 1))
+        } else {
+          // 默认添加
+          item.children = addLevel(children, (item.level as number) + 1)
+        }
+        item.loading = false
+      },
+      () => {
+        item.loading = false
+      }
+    )
+  }
 }
 // 提交数据
 const handleSubmit = (item: CascaderOption) => {
   if (item.disabled) return
+  // 如果当前提交的元素不是选中元素则触发selecet方法选中当前元素
+  if (!item.selected) {
+    handleSelected(item)
+  }
   emits('submitData', item)
 }
+
 // 键盘事件处理
 const handleKeyDown = (e: KeyboardEvent) => {
   switch (e.key) {
     // 上
     case 'ArrowUp':
-      indexCount(-1)
-      setScrollHeight()
+      setIndexCount(-1)
       break
     // 下
     case 'ArrowDown':
-      indexCount(1)
-      setScrollHeight()
+      setIndexCount(1)
       break
     // 左
     case 'ArrowLeft':
@@ -95,29 +138,37 @@ const handleKeyDown = (e: KeyboardEvent) => {
       break
   }
   // 选中当前元素
-  handleSelected(currentItem.value)
+  if (e.key == 'ArrowUp' || e.key == 'ArrowDown') {
+    if (currentIndex.value != oldIndex.value) {
+      handleSelected(currentItem.value)
+    }
+  }
+  setScrollHeight()
 }
 // index 处理和限制
-const indexCount = (num: number) => {
+const setIndexCount = (num: number) => {
   let max = props.options.length - 1
 
-  currentIndex.value += num
+  const nextIndext = currentIndex.value + num
+  const nextItem = props.options[nextIndext]
 
-  if (currentIndex.value > max) {
-    currentIndex.value = max
-  }
-  if (currentIndex.value < 0) {
-    currentIndex.value = 0
-  }
-
-  if (currentItem.value.disabled) {
-    if (currentIndex.value == max && num > 0) {
-      indexCount(-num)
-    } else if (currentIndex.value == 0 && num < 0) {
-      indexCount(1)
+  if (nextItem?.disabled) {
+    if (nextIndext == max && num > 0) {
+      return
+    } else if (nextIndext == 0 && num < 0) {
+      return
     } else {
-      indexCount(num)
+      return setIndexCount(num * 2)
     }
+  }
+
+  oldIndex.value = currentIndex.value
+  if (nextIndext > max) {
+    currentIndex.value = max
+  } else if (nextIndext < 0) {
+    currentIndex.value = 0
+  } else {
+    currentIndex.value = nextIndext
   }
 }
 // 设置滚动高度
@@ -130,8 +181,23 @@ const setScrollHeight = () => {
 }
 
 // 获取焦点
-const hanleFocus = () => {
-  handleSelected(currentItem.value)
+const hanleFocus = (e) => {
+  const disabled = props.options?.every((item) => item.disabled)
+  const hasSelected = props.options?.some((item) => item.selected)
+
+  if (disabled) return cascaderPanelRef.value.blur()
+
+  let newIndex = currentIndex.value
+  oldIndex.value = currentIndex.value
+  while (props.options[newIndex].disabled && (currentIndex.value = newIndex)) {
+    newIndex += 1
+  }
+
+  // 如果有被选中的则不会重复执行选中
+  if (!hasSelected && !e.sourceCapabilities) {
+    handleSelected(currentItem.value)
+  }
+
   isFocus.value = true
 }
 // 失去焦点
@@ -198,10 +264,13 @@ $active-color: #409eff;
         .icon-checked-box {
           font-size: 12px;
         }
-        .arrow-icon-box {
-          font-size: 12px;
-          transform: rotate(90deg);
+        .btn-box {
           margin-left: auto;
+          display: flex;
+          .arrow-icon-box {
+            font-size: 12px;
+            transform: rotate(90deg);
+          }
         }
       }
       .hover {

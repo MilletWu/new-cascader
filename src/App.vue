@@ -1,280 +1,9 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import Cascader from './cascader/main.vue'
-
-const options = reactive([
-  {
-    value: 'guide',
-    label: 'Guide',
-    disabled: true,
-    children: [
-      {
-        value: 'disciplines',
-        label: 'Disciplines',
-        children: [
-          {
-            value: 'consistency',
-            label: 'Consistency'
-          },
-          {
-            value: 'feedback',
-            label: 'Feedback'
-          },
-          {
-            value: 'efficiency',
-            label: 'Efficiency'
-          },
-          {
-            value: 'controllability',
-            label: 'Controllability'
-          }
-        ]
-      },
-      {
-        value: 'navigation',
-        label: 'Navigation',
-        disabled: true,
-        children: [
-          {
-            value: 'side nav',
-            label: 'Side Navigation'
-          },
-          {
-            value: 'top nav',
-            label: 'Top Navigation'
-          }
-        ]
-      }
-    ]
-  },
-  {
-    value: 'component',
-    label: 'Component',
-
-    children: [
-      {
-        value: 'basic',
-        label: 'Basic',
-        children: [
-          {
-            value: 'layout',
-            label: 'Layout'
-          },
-          {
-            value: 'color',
-            label: 'Color'
-          },
-          {
-            value: 'typography',
-            label: 'Typography'
-          },
-          {
-            value: 'icon',
-            label: 'Icon'
-          },
-          {
-            value: 'button',
-            label: 'Button'
-          }
-        ]
-      },
-      {
-        value: 'form',
-        label: 'Form',
-        children: [
-          {
-            value: 'radio',
-            label: 'Radio'
-          },
-          {
-            value: 'checkbox',
-            label: 'Checkbox'
-          },
-          {
-            value: 'input',
-            label: 'Input'
-          },
-          {
-            value: 'input-number',
-            label: 'InputNumber'
-          },
-          {
-            value: 'select',
-            label: 'Select'
-          },
-          {
-            value: 'cascader',
-            label: 'Cascader'
-          },
-          {
-            value: 'switch',
-            label: 'Switch'
-          },
-          {
-            value: 'slider',
-            label: 'Slider'
-          },
-          {
-            value: 'time-picker',
-            label: 'TimePicker'
-          },
-          {
-            value: 'date-picker',
-            label: 'DatePicker'
-          },
-          {
-            value: 'datetime-picker',
-            label: 'DateTimePicker'
-          },
-          {
-            value: 'upload',
-            label: 'Upload'
-          },
-          {
-            value: 'rate',
-            label: 'Rate'
-          },
-          {
-            value: 'form',
-            label: 'Form'
-          }
-        ]
-      },
-      {
-        value: 'data',
-        label: 'Data',
-        disabled: true,
-        children: [
-          {
-            value: 'table',
-            label: 'Table'
-          },
-          {
-            value: 'tag',
-            label: 'Tag'
-          },
-          {
-            value: 'progress',
-            label: 'Progress'
-          },
-          {
-            value: 'tree',
-            label: 'Tree'
-          },
-          {
-            value: 'pagination',
-            label: 'Pagination'
-          },
-          {
-            value: 'badge',
-            label: 'Badge'
-          }
-        ]
-      },
-      {
-        value: 'notice',
-        label: 'Notice',
-        children: [
-          {
-            value: 'alert',
-            label: 'Alert'
-          },
-          {
-            value: 'loading',
-            label: 'Loading'
-          },
-          {
-            value: 'message',
-            label: 'Message'
-          },
-          {
-            value: 'message-box',
-            label: 'MessageBox'
-          },
-          {
-            value: 'notification',
-            label: 'Notification'
-          }
-        ]
-      },
-      {
-        value: 'navigation',
-        label: 'Navigation',
-        children: [
-          {
-            value: 'menu',
-            label: 'Menu'
-          },
-          {
-            value: 'tabs',
-            label: 'Tabs'
-          },
-          {
-            value: 'breadcrumb',
-            label: 'Breadcrumb'
-          },
-          {
-            value: 'dropdown',
-            label: 'Dropdown'
-          },
-          {
-            value: 'steps',
-            label: 'Steps'
-          }
-        ]
-      },
-      {
-        value: 'others',
-        label: 'Others',
-        children: [
-          {
-            value: 'dialog',
-            label: 'Dialog'
-          },
-          {
-            value: 'tooltip',
-            label: 'Tooltip'
-          },
-          {
-            value: 'popover',
-            label: 'Popover'
-          },
-          {
-            value: 'card',
-            label: 'Card'
-          },
-          {
-            value: 'carousel',
-            label: 'Carousel'
-          },
-          {
-            value: 'collapse',
-            label: 'Collapse'
-          }
-        ]
-      }
-    ]
-  },
-  {
-    value: 'resource',
-    label: 'Resource',
-    disabled: true,
-    children: [
-      {
-        value: 'axure',
-        label: 'Axure Components'
-      },
-      {
-        value: 'sketch',
-        label: 'Sketch Templates'
-      },
-      {
-        value: 'docs',
-        label: 'Design Documentation'
-      }
-    ]
-  }
-])
+import axios from 'axios'
+import type { CascaderOption } from './cascader/main'
+const options = reactive([])
 const inputValue = ref('')
 const change = ({ newVal }) => {
   console.log('change:', newVal)
@@ -282,8 +11,68 @@ const change = ({ newVal }) => {
 const finallyx = ({ newVal }) => {
   console.log('finally:', newVal)
 }
+
 const close = () => {
   console.log('close')
+}
+
+const getData = async (value, level) => {
+  const res = await axios({
+    url: 'https://wxtest.jwsoft.info/backapi/api/His/Crypto',
+    data: {
+      AccessKey: 'pau7xke2zf0py397ubi6wic8rh0mqv5z',
+      OrgCode: '0000',
+      OrgName: '内置机构',
+      SysId: '607',
+      DeptCode: '101',
+      DeptName: '内科门诊',
+      UserCode: '1001',
+      UserName: '刘贝贝',
+      RltType: '1',
+      FunctionCode: '60000012000',
+      NodeName: 'ACT_getAdminiDivisionByParentcode',
+      Connect: '',
+      Parament: {
+        mainData: {
+          parentcode: value,
+          regionlevel: level
+        }
+      }
+    },
+    method: 'POST'
+  })
+  return res
+}
+onMounted(async () => {
+  const res = (await getData('0', '1')).data.data
+  options.push(...res)
+})
+const lazyLoad = async (item: CascaderOption): Promise<CascaderOption[]> => {
+  const { value, level } = item
+
+  return new Promise<CascaderOption[]>(async (resolve, reject) => {
+    if (value && level) {
+      const res = (await getData(value, level + 1)).data
+      if (res.code == -1) {
+        reject(res)
+      }
+      if (res.data.length == 0) {
+        item.leaf = true
+      }
+
+      if (level == 4) {
+        res.data.forEach((item1: CascaderOption) => {
+          item1.leaf = true
+        })
+      }
+
+      let children = res.data
+      resolve(children)
+    }
+  })
+}
+const lazyCallBack = (crruent: CascaderOption, result: CascaderOption[]) => {
+  crruent.children = result
 }
 </script>
 
@@ -294,9 +83,12 @@ const close = () => {
     separator="-"
     :clearable="true"
     v-model="inputValue"
-    panel-height="600px"
+    panel-height="204px"
     @change="change"
     @finally="finallyx"
     @close="close"
+    :lazy="true"
+    :lazy-load="lazyLoad"
+    :lazy-call-back="lazyCallBack"
   />
 </template>
