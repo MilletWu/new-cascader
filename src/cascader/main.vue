@@ -16,6 +16,7 @@
         ref="inputRef"
         :placeholder="inputPlaceholder"
         :readonly="!filterable"
+        @keydown.enter.stop="handleInputEnter"
       />
       <div class="btn-box">
         <!-- 清空 -->
@@ -92,11 +93,14 @@ const props = withDefaults(defineProps<CascaderProps>(), {
     childrenKey: 'children'
   })
 })
+// 自定义数据字段
 const { valueKey, lableKey, childrenKey } = props.setProps
+// emits
 const emits = defineEmits(['update:modelValue', 'finally', 'change', 'close'])
 // 数据添加层级标识
 const newOptions = reactive(props.options)
 
+// 计算第一层面板的数据
 const panelOptions = computed(() => {
   let options = addLevel(addSelectedField(newOptions))
   return reactive(options)
@@ -292,6 +296,82 @@ const clear = () => {
   panelList.splice(0)
   oldChecked.checked = false
   hasOPen.value = false
+}
+
+// search 搜索事件
+const searchTree = (
+  keyword: string,
+  optionsTree: Record<string, unknown>[],
+  searchKeys: string[] = ['label', 'phoneticCode']
+): Record<string, unknown>[] => {
+  console.log(keyword)
+
+  if (!optionsTree.length) return []
+  const resList: any[] = []
+  const map = new Map()
+  const includesMap = new Map()
+
+  function setMap(list: any[], parent: any = null, parentName = '', parentList: any[] = []) {
+    for (const item of list) {
+      if (item?.disabled) continue
+      item.parent = parent
+      item.name = parentName ? parentName + '/' + item.label : item.label
+      item.list = parentList ? [...parentList, { ...item }] : [{ ...item }]
+      map.set(item.value, item)
+      if (item.children && item.children.length) {
+        setMap(item.children, item, item.name, item.list)
+      }
+    }
+  }
+  setMap(optionsTree)
+
+  for (const [_key, value] of map) {
+    for (const searchKey of searchKeys) {
+      if (value[searchKey] && value[searchKey].includes(keyword)) {
+        includesMap.set(value.value, value)
+        break
+      }
+    }
+  }
+
+  for (const [_key, value] of includesMap) {
+    // 查找父级在不在
+    if (!value.parent) {
+      setLeafNode(value.children)
+      resList.push({ name: value.name, list: value.list })
+      continue
+    }
+    const rootNode = getRootNode(value)
+    setLeafNode(rootNode.children)
+    resList.push({ name: rootNode.name, list: rootNode.list })
+  }
+
+  function setLeafNode(list: any[]) {
+    if (!list?.length) return
+    for (const item of list) {
+      if (item.children && item.children.length) {
+        setLeafNode(item.children)
+        continue
+      }
+      resList.push({ name: item.name, list: item.list })
+    }
+  }
+
+  function getRootNode(data: Record<string, any>) {
+    if (includesMap.get(data?.parent?.value)) {
+      return getRootNode(data?.parent)
+    }
+    return data
+  }
+
+  return resList
+}
+
+const handleInputEnter = () => {
+  if (props.filterable) {
+    const res = searchTree(inputValue.value as string, panelOptions.value)
+    console.log(res)
+  }
 }
 </script>
 

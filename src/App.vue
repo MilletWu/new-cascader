@@ -6,10 +6,10 @@ import type { CascaderOption } from './cascader/main'
 const options = reactive([])
 const inputValue = ref('')
 const change = ({ newVal }) => {
-  console.log('change:', newVal)
+  // console.log('change:', newVal)
 }
 const finallyx = ({ newVal }) => {
-  console.log('finally:', newVal)
+  // console.log('finally:', newVal)
 }
 
 const close = () => {
@@ -84,11 +84,12 @@ const lazyCallBack = (crruent: CascaderOption, result: CascaderOption[]) => {
     :clearable="true"
     v-model="inputValue"
     panel-height="204px"
-    @change="change"
-    @finally="finallyx"
-    @close="close"
     :lazy="true"
     :lazy-load="lazyLoad"
     :lazy-call-back="lazyCallBack"
+    :filterable="true"
+    @change="change"
+    @finally="finallyx"
+    @close="close"
   />
 </template>
