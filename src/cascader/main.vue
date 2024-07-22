@@ -1,5 +1,11 @@
 <template>
-  <div class="cascader-box" ref="cascaderBoxRef" tabindex="0" @keydown="handleKeydown">
+  <div
+    class="cascader-box"
+    ref="cascaderBoxRef"
+    tabindex="0"
+    @keydown="handleKeydown"
+    :style="{ width: width }"
+  >
     <!-- Input 框-->
     <div
       class="input-box"
@@ -16,7 +22,6 @@
         ref="inputRef"
         :placeholder="inputPlaceholder"
         :readonly="!filterable"
-        @keydown.enter.stop="handleInputEnter"
       />
       <div class="btn-box">
         <!-- 清空 -->
@@ -32,9 +37,9 @@
       </div>
     </div>
     <!-- 面板展示 -->
-    <Transition name="fade">
+    <Transition searchName="fade">
       <div class="panel-list-box" v-show="hasOPen">
-        <div class="panel-list-container" ref="panelListRef">
+        <div class="panel-list-container" ref="panelListRef" v-show="!hasSearchPanel">
           <CascaderPanel
             :panelHeight="panelHeight"
             :options="panelOptions"
@@ -47,7 +52,7 @@
             :lazyLoad="lazyLoad"
             :lazy-call-back="lazyCallBack"
           />
-          <template v-for="panelItem in paneShowlList" :key="panelItem.label">
+          <template v-for="panelItem in paneShowlList" :key="panelItem[lableKey]">
             <CascaderPanel
               :options="panelItem[childrenKey]"
               :panelHeight="panelHeight"
@@ -62,6 +67,27 @@
             />
           </template>
         </div>
+        <template v-if="filterable">
+          <div
+            class="search-panel panel-list-container"
+            ref="searchPanelRef"
+            v-show="filterable && hasSearchPanel"
+          >
+            <CascaderPanel
+              :options="searchResult"
+              :panelHeight="panelHeight"
+              :set-props="{
+                valueKey: 'searchName',
+                lableKey: 'searchName',
+                childrenKey: 'list'
+              }"
+              :filterable="true"
+              @addPanel="addPanel"
+              @submitData="submitData"
+              @enterSubmit="enterSubmit"
+            />
+          </div>
+        </template>
 
         <span class="decoration-icon"></span>
       </div>
@@ -72,7 +98,7 @@
 <script setup lang="ts">
 import CascaderPanel from './components/cascader-panel.vue'
 import './icon-class/iconfont.css'
-import { CascaderProps, CascaderOption } from './main'
+import { CascaderProps, CascaderOption, ReturnData } from './main'
 import { ref, computed, reactive, nextTick } from 'vue'
 import { useClickOutside } from './hooks/click-outside'
 import { addLevel, addSelectedField } from './utils/index.ts'
@@ -85,13 +111,14 @@ const props = withDefaults(defineProps<CascaderProps>(), {
   // input占位符
   inputPlaceholder: '请选择',
   filterable: false,
-  panelHeight: '200px',
+  panelHeight: '204px',
   lazy: false,
   setProps: () => ({
     valueKey: 'value',
     lableKey: 'label',
     childrenKey: 'children'
-  })
+  }),
+  width: '200px'
 })
 // 自定义数据字段
 const { valueKey, lableKey, childrenKey } = props.setProps
@@ -149,8 +176,9 @@ const hasClear = computed(() => {
   // props.clear是否存在，是否为true,input-box是否触发hover,input是否存在值
   return props.clearable && inputValue.value && hasInputHover.value
 })
+// 最后选择的结果
 const resultData = reactive({})
-
+// input框展示的值
 const inputValue = computed({
   get() {
     return props.modelValue
@@ -160,10 +188,23 @@ const inputValue = computed({
     if (v !== inputValue.value) {
       emits('change', { newVal: resultData })
       emits('update:modelValue', v)
+      if (props.filterable && v?.trim() != '') {
+        handleInputEnter(v as string)
+      }
+    }
+
+    if (v?.trim() == '') {
+      // 控制关闭
+      hasSearchPanel.value = false
     }
   }
 })
-
+// 搜索结果
+const searchResult = reactive<Record<string, unknown>[]>([])
+// 是否展示搜索面板
+const hasSearchPanel = ref(false)
+// 搜索面板dom
+const searchPanelRef = ref()
 // input-box 移入事件处理
 const onInputBoxMouseEnter = () => {
   if (!props.clearable) return
@@ -187,7 +228,13 @@ const onInputBoxOutsideClick = () => {
 useClickOutside(cascaderBoxRef, onInputBoxOutsideClick)
 
 //添加面板
-const addPanel = (panelItem: CascaderOption) => {
+const addPanel = ({ currentItem: panelItem, filterable }: ReturnData) => {
+  // 如果是过滤面板则直接返回
+
+  if (filterable) {
+    resetSelected(searchResult, 0)
+    return (panelItem.selected = true)
+  }
   panelItem.selected = true
   // 先判断这个层级是否存在面板渲染
   const index = panelList.findIndex((item) => item?.level === panelItem?.level)
@@ -197,10 +244,10 @@ const addPanel = (panelItem: CascaderOption) => {
   if (index !== -1) {
     if (panelList[index] != panelItem) {
       // 重置所有样式
-      resetSelected(index)
+      resetSelected(panelList, index)
     } else {
       // 重置后面所有面板样式
-      resetSelected(index + 1)
+      resetSelected(panelList, index + 1)
     }
     panelList.splice(index, 1, panelItem)
     // 清除后面所有面板
@@ -210,43 +257,85 @@ const addPanel = (panelItem: CascaderOption) => {
   }
 }
 // 重置所有面板样式
-const resetSelected = (index: number) => {
-  for (let i = index; i < panelList.length; i++) {
-    panelList[i].selected = false
+const resetSelected = (arr: any[], index: number) => {
+  for (let i = index; i < arr.length; i++) {
+    arr[i].selected = false
   }
 }
 
 // 数据提交
-const submitData = (panelItem: CascaderOption) => {
+const submitData = ({ currentItem: panelItem, filterable }: ReturnData) => {
   oldChecked.checked = false
   panelItem.checked = true
   oldChecked = panelItem
+
+  //定义返回的数据
   let newData = {
     [valueKey + 'List']: [] as any,
     [lableKey]: ''
   }
+  // 如果没开启查询
+  if (!filterable) {
+    let separator = `${props.separator}`
+    panelList.forEach((item) => {
+      newData[valueKey + 'List'].push(item[valueKey])
+      newData[lableKey] += item[lableKey] + separator
+    })
 
-  let separator = `${props.separator}`
-  panelList.forEach((item) => {
-    newData[valueKey + 'List'].push(item[valueKey])
-    newData[lableKey] += item[lableKey] + separator
-  })
-
-  // 去掉末尾的分隔符
-  newData[lableKey] = newData[lableKey].slice(0, newData[lableKey].lastIndexOf(separator))
+    // 去掉末尾的分隔符
+    newData[lableKey] = newData[lableKey].slice(0, newData[lableKey].lastIndexOf(separator))
+  } else {
+    // 重置原本选中的样式
+    // resetSelected(panelList, 0)
+    resetSelected(panelList, 0)
+    // 清空展示面板
+    panelList.splice(0)
+    panelItem['searchList'].forEach((item: CascaderOption) => {
+      newData[valueKey + 'List'].push(item[valueKey])
+    })
+    newData[lableKey] = panelItem['searchName']
+    // 重设面板选中
+    resetPanel(newData[valueKey + 'List'])
+  }
   Object.assign(resultData, newData)
   inputValue.value = newData[lableKey]
   // 关闭面板列表
   hasOPen.value = false
+  hasSearchPanel.value = false
   // 聚焦到面板
   nextTick(() => {
     // cascaderBoxRef.value.focus()
     props.filterable ? inputRef.value?.focus() : inputBoxRef.value?.focus()
   })
 }
+
+// 重设面板
+const resetPanel = (list: string[]) => {
+  let currentLevelItem = panelOptions.value
+  list.forEach((item: string, index: number, arr: string[]) => {
+    let selectedItem = []
+    if (index == 0) {
+      selectedItem = currentLevelItem
+    } else {
+      selectedItem = currentLevelItem[childrenKey]
+    }
+    let currentItem = selectedItem.find((selected: CascaderOption) => selected.value == item)
+
+    if (currentItem) {
+      currentItem.selected = true
+      panelList.push(currentItem)
+      if (index == arr.length - 1) {
+        currentItem.checked = true
+        oldChecked = currentItem
+      }
+      currentLevelItem = currentItem
+    }
+  })
+}
+
 // 回车事件提交数据
-const enterSubmit = ({ currentItem }: { currentItem: CascaderOption }) => {
-  submitData(currentItem)
+const enterSubmit = ({ currentItem, filterable }: ReturnData) => {
+  submitData({ currentItem, filterable })
 }
 type keydown = {
   direction: string
@@ -257,7 +346,11 @@ const handleKeydown = (e: KeyboardEvent) => {
   if (e.key == 'ArrowDown') {
     hasOPen.value = true
     nextTick(() => {
-      panelListRef.value[childrenKey][0]?.focus()
+      // 这边的children不是数据中的字段，而是dom操作
+      if (props.filterable && hasSearchPanel.value) return searchPanelRef.value.children[0]?.focus()
+      Array.from(panelListRef.value.children).forEach((item) => {
+        item.focus()
+      })
     })
   }
 }
@@ -274,7 +367,7 @@ const handlePanelKeydown = ({ direction, currentItem }: keydown) => {
     case 'left':
       if (!hasLeft) break
       newIndex -= 1
-      resetSelected(newIndex)
+      resetSelected(panelList, newIndex)
       break
     case 'right':
       if (!hasRight) break
@@ -284,8 +377,7 @@ const handlePanelKeydown = ({ direction, currentItem }: keydown) => {
 
   // 如果index没有变化则返回
   if (newIndex == currentIndex) return
-
-  const nextFocusItem = panelListRef.value[childrenKey][newIndex]
+  const nextFocusItem = panelListRef.value.children[newIndex]
   nextTick(() => {
     nextFocusItem.focus()
   })
@@ -296,30 +388,31 @@ const clear = () => {
   panelList.splice(0)
   oldChecked.checked = false
   hasOPen.value = false
+  if (props.filterable) {
+    searchResult.splice(0)
+  }
 }
 
-// search 搜索事件
+// 搜索事件处理函数
 const searchTree = (
   keyword: string,
   optionsTree: Record<string, unknown>[],
-  searchKeys: string[] = ['label', 'phoneticCode']
+  searchKeys: string[] = [lableKey, 'phoneticCode']
 ): Record<string, unknown>[] => {
-  console.log(keyword)
-
   if (!optionsTree.length) return []
   const resList: any[] = []
   const map = new Map()
   const includesMap = new Map()
 
-  function setMap(list: any[], parent: any = null, parentName = '', parentList: any[] = []) {
-    for (const item of list) {
+  function setMap(searchList: any[], parent: any = null, parentName = '', parentList: any[] = []) {
+    for (const item of searchList) {
       if (item?.disabled) continue
       item.parent = parent
-      item.name = parentName ? parentName + '/' + item.label : item.label
-      item.list = parentList ? [...parentList, { ...item }] : [{ ...item }]
-      map.set(item.value, item)
-      if (item.children && item.children.length) {
-        setMap(item.children, item, item.name, item.list)
+      item.searchName = parentName ? parentName + props.separator + item[lableKey] : item[lableKey]
+      item.searchList = parentList ? [...parentList, { ...item }] : [{ ...item }]
+      map.set(item[valueKey], item)
+      if (item[childrenKey] && item[childrenKey].length) {
+        setMap(item[childrenKey], item, item.searchName, item.searchList)
       }
     }
   }
@@ -328,7 +421,7 @@ const searchTree = (
   for (const [_key, value] of map) {
     for (const searchKey of searchKeys) {
       if (value[searchKey] && value[searchKey].includes(keyword)) {
-        includesMap.set(value.value, value)
+        includesMap.set(value[valueKey], value)
         break
       }
     }
@@ -337,28 +430,28 @@ const searchTree = (
   for (const [_key, value] of includesMap) {
     // 查找父级在不在
     if (!value.parent) {
-      setLeafNode(value.children)
-      resList.push({ name: value.name, list: value.list })
+      setLeafNode(value[childrenKey])
+      resList.push({ searchName: value.searchName, searchList: value.searchList })
       continue
     }
     const rootNode = getRootNode(value)
-    setLeafNode(rootNode.children)
-    resList.push({ name: rootNode.name, list: rootNode.list })
+    setLeafNode(rootNode[childrenKey])
+    resList.push({ searchName: rootNode.searchName, searchList: rootNode.searchList })
   }
 
-  function setLeafNode(list: any[]) {
-    if (!list?.length) return
-    for (const item of list) {
-      if (item.children && item.children.length) {
-        setLeafNode(item.children)
+  function setLeafNode(searchList: any[]) {
+    if (!searchList?.length) return
+    for (const item of searchList) {
+      if (item[childrenKey] && item[childrenKey].length) {
+        setLeafNode(item[childrenKey])
         continue
       }
-      resList.push({ name: item.name, list: item.list })
+      resList.push({ searchName: item.searchName, searchList: item.searchList })
     }
   }
 
   function getRootNode(data: Record<string, any>) {
-    if (includesMap.get(data?.parent?.value)) {
+    if (includesMap.get(data?.parent?.[valueKey])) {
       return getRootNode(data?.parent)
     }
     return data
@@ -367,15 +460,21 @@ const searchTree = (
   return resList
 }
 
-const handleInputEnter = () => {
+// input 回车事件处理
+const handleInputEnter = (searchKey: string) => {
   if (props.filterable) {
-    const res = searchTree(inputValue.value as string, panelOptions.value)
-    console.log(res)
+    // 搜索之前清空
+    hasOPen.value = true
+    searchResult.splice(0)
+    const res = searchTree(searchKey as string, panelOptions.value)
+    searchResult.push(...addSelectedField(res))
+    searchResult.reverse()
+    hasSearchPanel.value = true
   }
 }
 </script>
 
-<style scoped lang="scss">
+<style lang="scss" scoped>
 $default-color: #dcdfe6;
 $active-color: #409eff;
 
@@ -383,8 +482,9 @@ $active-color: #409eff;
   box-sizing: border-box;
   position: relative;
   color: #606266;
-  width: fit-content;
+  width: auto;
   outline: none;
+
   .input-box {
     box-sizing: border-box;
     padding: 1px 11px;
@@ -401,7 +501,7 @@ $active-color: #409eff;
       padding: 0 2px;
       border: none;
       outline: none;
-      width: auto;
+      width: 100%;
       height: 28px;
       font-size: 14px;
       color: #606266;

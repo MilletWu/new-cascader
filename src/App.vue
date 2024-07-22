@@ -88,6 +88,7 @@ const lazyCallBack = (crruent: CascaderOption, result: CascaderOption[]) => {
     :lazy-load="lazyLoad"
     :lazy-call-back="lazyCallBack"
     :filterable="true"
+    width="400px"
     @change="change"
     @finally="finallyx"
     @close="close"

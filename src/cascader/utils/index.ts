@@ -10,9 +10,9 @@ export const addLevel = (data: any, level = 1) => {
 }
 
 // 添加 selected checked字段
-export const addSelectedField = (data: any, selected = false, checked = false) => {
+export const addSelectedField = (data: any, selected = false, checked = false, leaf = false) => {
   return data.map((item: any) => {
-    const newItem = { ...item, selected, checked }
+    const newItem = { ...item, selected, checked, leaf }
     if (item.children) {
       newItem.children = addSelectedField(item.children, selected, checked)
     }

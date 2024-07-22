@@ -10,7 +10,12 @@
     @mouseleave="handleMouseleave"
   >
     <div class="cascader-panel-container" :style="{ height: panelHeight }">
-      <ul class="scrollable" :class="{ 'scrollable-hidden': !scrollbarVisible }" ref="listRef">
+      <ul
+        class="scrollable"
+        :class="{ 'scrollable-hidden': !scrollbarVisible }"
+        ref="listRef"
+        v-if="options?.length"
+      >
         <li
           v-for="(item, index) in options"
           :class="{
@@ -18,18 +23,24 @@
             hover: currentIndex == index && isFocus,
             disabled: item.disabled
           }"
-          :key="item.value"
+          :key="item[valueKey]"
           @click="() => clickSelected(item, index)"
           @dblclick="() => doubleClickSubmit(item)"
         >
           <i v-if="item.checked" class="icon-checked-box iconfont icon-checked"></i>
-          <span>{{ item.label }}</span>
+          <span>{{ item[lableKey] }}</span>
           <div class="btn-box">
-            <i v-if="!item.leaf && !item.loading" class="arrow-icon-box iconfont icon-arrow"></i>
+            <!-- 箭头 -->
+            <i
+              v-if="!item?.leaf && !item.loading && !filterable"
+              class="arrow-icon-box iconfont icon-arrow"
+            ></i>
+            <!-- 加载效果 -->
             <i v-if="item.loading && !item.leaf && lazy == true" class="iconfont icon-loading"></i>
           </div>
         </li>
       </ul>
+      <div class="no-data-box" v-if="!options?.length">暂无数据</div>
     </div>
   </div>
 </template>
@@ -41,8 +52,16 @@ import { ref, computed, nextTick } from 'vue'
 import { addLevel } from '../utils/index.ts'
 import { useClickHandler } from '../utils/clickhandle.ts'
 const emits = defineEmits(['addPanel', 'submitData', 'arrowLeft', 'arrowRight', 'enterSubmit'])
-const props = withDefaults(defineProps<CascaderPanelProps>(), {})
-
+const props = withDefaults(defineProps<CascaderPanelProps>(), {
+  setProps: () => ({
+    valueKey: 'value',
+    lableKey: 'label',
+    childrenKey: 'children'
+  }),
+  panelHeight: '204px',
+  filterable: false
+})
+const { valueKey, lableKey, childrenKey } = props.setProps
 // cascaderPanelRef dom元素 面板dom元素
 const cascaderPanelRef = ref()
 // 列表dom
@@ -76,7 +95,7 @@ const handleSelected = (item: CascaderOption, index?: number) => {
   currentIndex.value = newIndex
   // 懒加载处理函数
   handleLazy(item)
-  emits('addPanel', item)
+  emits('addPanel', { currentItem: item, filterable: props.filterable })
 }
 
 // 懒加载处理函数
@@ -86,13 +105,13 @@ const handleLazy = (item: CascaderOption) => {
     // 请求到子数组
     item.loading = true
     props.lazyLoad(item).then(
-      (children: CascaderOption[]) => {
+      (res: CascaderOption[]) => {
         // 如果传递了懒加载返回函数则用户控制数据添加，返回的值是当前对象和处理完格式的请求值
         if (props.lazyCallBack) {
-          props.lazyCallBack(item, addLevel(children, (item.level as number) + 1))
+          props.lazyCallBack(item, addLevel(res, (item.level as number) + 1))
         } else {
           // 默认添加
-          item.children = addLevel(children, (item.level as number) + 1)
+          item[childrenKey] = addLevel(res, (item.level as number) + 1)
         }
         item.loading = false
       },
@@ -109,7 +128,7 @@ const handleSubmit = (item: CascaderOption) => {
   if (!item.selected) {
     handleSelected(item)
   }
-  emits('submitData', item)
+  emits('submitData', { currentItem: item, filterable: props.filterable })
 }
 
 // 键盘事件处理
@@ -134,7 +153,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
       break
     // 右
     case 'Enter':
-      emits('enterSubmit', { currentItem: currentItem.value })
+      emits('enterSubmit', { currentItem: currentItem.value, filterable: props.filterable })
       break
   }
   // 选中当前元素
@@ -143,7 +162,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
       handleSelected(currentItem.value)
     }
   }
-  setScrollHeight()
+  if (e.key != 'Enter') setScrollHeight()
 }
 // index 处理和限制
 const setIndexCount = (num: number) => {
@@ -182,20 +201,28 @@ const setScrollHeight = () => {
 
 // 获取焦点
 const hanleFocus = (e) => {
+  //  全部为禁用则失去焦点
   const disabled = props.options?.every((item) => item.disabled)
+  // 是否有选中
   const hasSelected = props.options?.some((item) => item.selected)
 
   if (disabled) return cascaderPanelRef.value.blur()
 
   let newIndex = currentIndex.value
   oldIndex.value = currentIndex.value
-  while (props.options[newIndex].disabled && (currentIndex.value = newIndex)) {
+  while (props.options[newIndex]?.disabled && (currentIndex.value = newIndex)) {
     newIndex += 1
   }
 
   // 如果有被选中的则不会重复执行选中
   if (!hasSelected && !e.sourceCapabilities) {
     handleSelected(currentItem.value)
+  }
+
+  if (hasSelected && !e.sourceCapabilities) {
+    const selectedItem = props.options.find((item) => item.selected)
+    currentIndex.value = props.options.indexOf(selectedItem)
+    setScrollHeight()
   }
 
   isFocus.value = true
@@ -233,6 +260,7 @@ $active-color: #409eff;
     font-size: 14px;
     color: #606266;
     outline: none;
+    position: relative;
     ul {
       margin: 0;
       padding: 6px 0;
@@ -250,6 +278,7 @@ $active-color: #409eff;
         height: 34px;
         line-height: 34px;
         outline: none;
+        cursor: pointer;
         &:hover {
           background-color: #f5f7fa;
         }
@@ -287,6 +316,13 @@ $active-color: #409eff;
         // 禁用
         cursor: not-allowed !important;
       }
+    }
+    .no-data-box {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      // font-weight: 600;
     }
   }
 }

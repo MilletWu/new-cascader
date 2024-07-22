@@ -25,6 +25,8 @@ export interface CascaderProps {
   // 懒加载函数lazy为true时开启
   lazyLoad?: LazyLoad
   lazyCallBack?: LazyCallBack
+  // 配置宽度
+  width?: string
 }
 
 // 数组中每个对象的参数配置
@@ -51,7 +53,14 @@ export interface CascaderPanelProps {
   // 懒加载函数lazy为true时开启
   lazyLoad?: LazyLoad
   lazyCallBack?: LazyCallBack
+  // 是否开启搜索
+  filterable?: boolean
 }
 
 export type LazyCallBack = (cureent: CascaderOption, result: CascaderOption[]) => void
 export type LazyLoad = (cureent: CascaderOption) => Promise<CascaderOption[]>
+
+export interface ReturnData {
+  currentItem: CascaderOption
+  filterable: boolean
+}
