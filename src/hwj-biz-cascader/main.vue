@@ -9,7 +9,7 @@
     <!-- Input 框-->
     <div
       class="input-box"
-      :class="{ active: hasOPen }"
+      :class="{ active: hasOpen }"
       ref="inputBoxRef"
       tabindex="0"
       @mouseenter="onInputBoxMouseEnter"
@@ -31,14 +31,14 @@
           <span
             v-show="true"
             class="arrow-icon-box iconfont icon-arrow"
-            :class="{ 'arrow-retrun': hasOPen }"
+            :class="{ 'arrow-return': hasOpen }"
           ></span
         ></Transition>
       </div>
     </div>
     <!-- 面板展示 -->
-    <Transition searchName="fade">
-      <div class="panel-list-box" v-show="hasOPen">
+    <Transition name="fade">
+      <div class="panel-list-box" v-show="hasOpen">
         <div class="panel-list-container" ref="panelListRef" v-show="!hasSearchPanel">
           <CascaderPanel
             :panelHeight="panelHeight"
@@ -49,10 +49,10 @@
             @arrowRight="handlePanelKeydown"
             @enterSubmit="enterSubmit"
             :lazy="lazy"
-            :lazyLoad="lazyLoad"
+            :lazy-load="lazyLoad"
             :lazy-call-back="lazyCallBack"
           />
-          <template v-for="panelItem in paneShowlList" :key="panelItem[lableKey]">
+          <template v-for="panelItem in paneShowList" :key="panelItem[labelKey]">
             <CascaderPanel
               :options="panelItem[childrenKey]"
               :panelHeight="panelHeight"
@@ -67,27 +67,22 @@
             />
           </template>
         </div>
-        <template v-if="filterable">
-          <div
-            class="search-panel panel-list-container"
-            ref="searchPanelRef"
-            v-show="filterable && hasSearchPanel"
-          >
-            <CascaderPanel
-              :options="searchResult"
-              :panelHeight="panelHeight"
-              :set-props="{
-                valueKey: 'searchName',
-                lableKey: 'searchName',
-                childrenKey: 'list'
-              }"
-              :filterable="true"
-              @addPanel="addPanel"
-              @submitData="submitData"
-              @enterSubmit="enterSubmit"
-            />
-          </div>
-        </template>
+
+        <div
+          class="search-panel panel-list-container"
+          ref="searchPanelRef"
+          v-if="filterable && hasSearchPanel"
+        >
+          <CascaderPanel
+            :options="searchResult"
+            :panelHeight="panelHeight"
+            :set-props="setFilterableProps"
+            :filterable="true"
+            @addPanel="addPanel"
+            @submitData="submitData"
+            @enterSubmit="enterSubmit"
+          />
+        </div>
 
         <span class="decoration-icon"></span>
       </div>
@@ -99,7 +94,7 @@
 import CascaderPanel from './components/cascader-panel.vue'
 import './icon-class/iconfont.css'
 import { CascaderProps, CascaderOption, ReturnData } from './main'
-import { ref, computed, reactive, nextTick } from 'vue'
+import { ref, computed, reactive, nextTick, watch } from 'vue'
 import { useClickOutside } from './hooks/click-outside'
 import { addLevel, addSelectedField } from './utils/index.ts'
 
@@ -115,13 +110,13 @@ const props = withDefaults(defineProps<CascaderProps>(), {
   lazy: false,
   setProps: () => ({
     valueKey: 'value',
-    lableKey: 'label',
+    labelKey: 'label',
     childrenKey: 'children'
   }),
   width: '200px'
 })
 // 自定义数据字段
-const { valueKey, lableKey, childrenKey } = props.setProps
+const { valueKey, labelKey, childrenKey } = props.setProps
 // emits
 const emits = defineEmits(['update:modelValue', 'finally', 'change', 'close'])
 // 数据添加层级标识
@@ -138,25 +133,30 @@ const panelList = reactive<CascaderOption[]>([])
 // 面板dom
 const panelListRef = ref()
 // 展示面板列表
-const paneShowlList = computed(() => {
+const paneShowList = computed(() => {
   return panelList.filter((item) => item[childrenKey]?.length)
 })
 // 保存面板值
 const hasOpenValue = ref(false)
 // 面板是否展开
-const hasOPen = computed({
+const hasOpen = computed({
   get() {
     return hasOpenValue.value
   },
   set(v) {
-    if (hasOPen.value == v) return
+    if (hasOpen.value == v) return
     if (!v) {
       emits('close')
     }
     hasOpenValue.value = v
   }
 })
-
+// 过滤面板配置props
+const setFilterableProps = {
+  valueKey: 'searchName',
+  labelKey: 'searchName',
+  childrenKey: 'list'
+}
 // cascaderBox dom对象
 const cascaderBoxRef = ref()
 
@@ -169,30 +169,54 @@ const inputRef = ref<HTMLInputElement>()
 let hasInputHover = ref(false)
 
 // 旧的选中对象
-let oldChecked: CascaderOption = { [valueKey]: '', [lableKey]: '', checked: false }
+let oldChecked: CascaderOption = { [valueKey]: '', [labelKey]: '', checked: false }
 
 // 是否显示清空
 const hasClear = computed(() => {
   // props.clear是否存在，是否为true,input-box是否触发hover,input是否存在值
   return props.clearable && inputValue.value && hasInputHover.value
 })
+
 // 最后选择的结果
-const resultData = reactive({})
+const resultData = ref([])
+const modelFlag = ref(false)
+// input model 初始值
+const inputModel = ref('')
+//  input框初始值 v-model更改初始值不希望触发input search事件
+const inputInitValue = computed({
+  get() {
+    return inputModel.value
+  },
+  set(v) {
+    if (modelFlag.value) {
+      emits('finally', { inputKey: v, valList: resultData.value })
+      if (v != inputInitValue.value) {
+        emits('change', { inputKey: v, valList: resultData.value })
+        inputModel.value = v
+        modelFlag.value = false
+      }
+    }
+    // 更新
+    if (v != inputInitValue.value) {
+      inputModel.value = v
+    }
+  }
+})
+
 // input框展示的值
 const inputValue = computed({
   get() {
-    return props.modelValue
+    return inputInitValue.value
   },
   set(v) {
-    emits('finally', { newVal: resultData })
-    if (v !== inputValue.value) {
-      emits('change', { newVal: resultData })
-      emits('update:modelValue', v)
+    emits('finally', { inputKey: v, valList: resultData.value })
+    if (v != inputValue.value) {
+      emits('change', { inputKey: v, valList: resultData.value })
+      inputInitValue.value = v
       if (props.filterable && v?.trim() != '') {
         handleInputEnter(v as string)
       }
     }
-
     if (v?.trim() == '') {
       // 控制关闭
       hasSearchPanel.value = false
@@ -218,11 +242,11 @@ const onInputBoxMouseLeave = () => {
 }
 // input-box 单击事件处理
 const onInputBoxClick = () => {
-  hasOPen.value = true
+  hasOpen.value = true
 }
 // input-box 外部单击事件处理
 const onInputBoxOutsideClick = () => {
-  hasOPen.value = false
+  hasOpen.value = false
 }
 // 外部钩子
 useClickOutside(cascaderBoxRef, onInputBoxOutsideClick)
@@ -271,80 +295,99 @@ const submitData = ({ currentItem: panelItem, filterable }: ReturnData) => {
 
   //定义返回的数据
   let newData = {
-    [valueKey + 'List']: [] as any,
-    [lableKey]: ''
+    [valueKey]: [] as any,
+    [labelKey]: ''
   }
   // 如果没开启查询
   if (!filterable) {
-    let separator = `${props.separator}`
+    let separator = props.separator
     panelList.forEach((item) => {
-      newData[valueKey + 'List'].push(item[valueKey])
-      newData[lableKey] += item[lableKey] + separator
+      newData[valueKey].push(item[valueKey])
+      newData[labelKey] += item[labelKey] + separator
     })
 
     // 去掉末尾的分隔符
-    newData[lableKey] = newData[lableKey].slice(0, newData[lableKey].lastIndexOf(separator))
+    newData[labelKey] = newData[labelKey].slice(0, newData[labelKey].lastIndexOf(separator))
   } else {
-    // 重置原本选中的样式
-    // resetSelected(panelList, 0)
-    resetSelected(panelList, 0)
-    // 清空展示面板
-    panelList.splice(0)
     panelItem['searchList'].forEach((item: CascaderOption) => {
-      newData[valueKey + 'List'].push(item[valueKey])
+      newData[valueKey].push(item[valueKey])
     })
-    newData[lableKey] = panelItem['searchName']
+    newData[labelKey] = panelItem['searchName']
     // 重设面板选中
-    resetPanel(newData[valueKey + 'List'])
+    resetPanel(newData[valueKey])
   }
-  Object.assign(resultData, newData)
-  inputValue.value = newData[lableKey]
+
+  // 数组不为空
+  if (resultData.value.length) {
+    // 清空
+    resultData.value.splice(0)
+  }
+
+  resultData.value.push(...newData[valueKey])
   // 关闭面板列表
-  hasOPen.value = false
+  hasOpen.value = false
   hasSearchPanel.value = false
+  emits('update:modelValue', resultData.value)
+  setVmodelPanel(resultData.value)
   // 聚焦到面板
   nextTick(() => {
-    // cascaderBoxRef.value.focus()
     props.filterable ? inputRef.value?.focus() : inputBoxRef.value?.focus()
   })
 }
 
 // 重设面板
 const resetPanel = (list: string[]) => {
+  // 重置样式
+  resetSelected(panelList, 0)
+  // 清空展示面板
+  panelList.splice(0)
+  oldChecked.checked = false
   let currentLevelItem = panelOptions.value
-  list.forEach((item: string, index: number, arr: string[]) => {
-    let selectedItem = []
-    if (index == 0) {
-      selectedItem = currentLevelItem
-    } else {
-      selectedItem = currentLevelItem[childrenKey]
-    }
-    let currentItem = selectedItem.find((selected: CascaderOption) => selected.value == item)
+  let index = 0
 
-    if (currentItem) {
-      currentItem.selected = true
-      panelList.push(currentItem)
-      if (index == arr.length - 1) {
-        currentItem.checked = true
-        oldChecked = currentItem
+  while (index < list.length) {
+    const item = list[index]
+
+    // 处理多层级情况
+    if (currentLevelItem) {
+      // 查找当前列表中匹配的项目
+      let currentItem = currentLevelItem.find((option: CascaderOption) => option.value === item)
+
+      if (currentItem) {
+        currentItem.selected = true
+        panelList.push(currentItem)
+
+        // 如果是列表中的最后一个项目，则标记为已选中并更新 oldChecked
+        if (index === list.length - 1) {
+          currentItem.checked = true
+          oldChecked = currentItem
+        }
+
+        // 更新 currentLevelItem 为当前找到的项目的子项目
+        currentLevelItem = currentItem[childrenKey]
+      } else {
+        break // 如果未找到当前项目，退出循环
       }
-      currentLevelItem = currentItem
+    } else {
+      break // 如果当前级别没有更深层级可供查找，退出循环
     }
-  })
+
+    index++ // 准备处理下一个项目
+  }
 }
 
 // 回车事件提交数据
 const enterSubmit = ({ currentItem, filterable }: ReturnData) => {
   submitData({ currentItem, filterable })
 }
-type keydown = {
+type KeyDown = {
   direction: string
   currentItem: CascaderOption
 }
 // 当前组件键盘事件处理
 const handleKeydown = (e: KeyboardEvent) => {
   if (e.key == 'ArrowDown') {
-    hasOPen.value = true
+    hasOpen.value = true
     nextTick(() => {
       // 这边的children不是数据中的字段，而是dom操作
       if (props.filterable && hasSearchPanel.value) return searchPanelRef.value.children[0]?.focus()
@@ -355,7 +398,7 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 }
 // 面板键盘事件处理
-const handlePanelKeydown = ({ direction, currentItem }: keydown) => {
+const handlePanelKeydown = ({ direction, currentItem }: KeyDown) => {
   const currentIndex = (currentItem.level as number) - 1
   let newIndex = currentIndex
   // 有子元素则能往右聚焦
@@ -384,11 +427,20 @@ const handlePanelKeydown = ({ direction, currentItem }: keydown) => {
 }
 // 清空
 const clear = () => {
+  // 清空
+  emits('update:modelValue', [])
   inputValue.value = ''
+  resultData.value.splice(0)
+  // 清空样式
+  resetSelected(panelList, 0)
+  // 清空展示面板
   panelList.splice(0)
+  // 取消选中
   oldChecked.checked = false
-  hasOPen.value = false
+  // 关闭
+  hasOpen.value = false
   if (props.filterable) {
+    hasSearchPanel.value = false
     searchResult.splice(0)
   }
 }
@@ -397,7 +449,7 @@ const clear = () => {
 const searchTree = (
   keyword: string,
   optionsTree: Record<string, unknown>[],
-  searchKeys: string[] = [lableKey, 'phoneticCode']
+  searchKeys: string[] = [labelKey, 'phoneticCode']
 ): Record<string, unknown>[] => {
   if (!optionsTree.length) return []
   const resList: any[] = []
@@ -408,7 +460,7 @@ const searchTree = (
     for (const item of searchList) {
       if (item?.disabled) continue
       item.parent = parent
-      item.searchName = parentName ? parentName + props.separator + item[lableKey] : item[lableKey]
+      item.searchName = parentName ? parentName + props.separator + item[labelKey] : item[labelKey]
       item.searchList = parentList ? [...parentList, { ...item }] : [{ ...item }]
       map.set(item[valueKey], item)
       if (item[childrenKey] && item[childrenKey].length) {
@@ -464,7 +516,7 @@ const searchTree = (
 const handleInputEnter = (searchKey: string) => {
   if (props.filterable) {
     // 搜索之前清空
-    hasOPen.value = true
+    hasOpen.value = true
     searchResult.splice(0)
     const res = searchTree(searchKey as string, panelOptions.value)
     searchResult.push(...addSelectedField(res))
@@ -472,8 +524,42 @@ const handleInputEnter = (searchKey: string) => {
     hasSearchPanel.value = true
   }
 }
-</script>
 
+// v-model面板
+const setVmodelPanel = (v: string | string[] | number[]) => {
+  modelFlag.value = true
+  let newInputValue = ''
+  let separator = props.separator
+  if (typeof v === 'string' || typeof v === 'number') {
+    resetPanel([v])
+  } else {
+    resetPanel(v as string[])
+  }
+
+  panelList.forEach((item) => {
+    newInputValue += item[labelKey] + separator
+  })
+
+  // 去掉末尾的分隔符
+  newInputValue = newInputValue.slice(0, newInputValue.lastIndexOf(separator))
+  // 更改初始化值不触发 搜索框
+  inputInitValue.value = newInputValue
+}
+
+watch(
+  panelOptions,
+  () => {
+    setVmodelPanel([...props.modelValue] as any[])
+  },
+  { once: true }
+)
+watch(
+  computed(() => props.modelValue),
+  (v) => {
+    setVmodelPanel([...v] as any[])
+  }
+)
+</script>
 <style lang="scss" scoped>
 $default-color: #dcdfe6;
 $active-color: #409eff;
@@ -574,7 +660,7 @@ $active-color: #409eff;
 .iconfont {
   color: $default-color;
 }
-.arrow-retrun {
+.arrow-return {
   transform: translate(-50%, -50%) rotate(360deg) !important;
 }
 .fade-enter-active,

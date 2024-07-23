@@ -28,7 +28,7 @@
           @dblclick="() => doubleClickSubmit(item)"
         >
           <i v-if="item.checked" class="icon-checked-box iconfont icon-checked"></i>
-          <span>{{ item[lableKey] }}</span>
+          <span>{{ item[labelKey] }}</span>
           <div class="btn-box">
             <!-- 箭头 -->
             <i
@@ -55,13 +55,13 @@ const emits = defineEmits(['addPanel', 'submitData', 'arrowLeft', 'arrowRight', 
 const props = withDefaults(defineProps<CascaderPanelProps>(), {
   setProps: () => ({
     valueKey: 'value',
-    lableKey: 'label',
+    labelKey: 'label',
     childrenKey: 'children'
   }),
   panelHeight: '204px',
   filterable: false
 })
-const { valueKey, lableKey, childrenKey } = props.setProps
+const { valueKey, labelKey, childrenKey } = props.setProps
 // cascaderPanelRef dom元素 面板dom元素
 const cascaderPanelRef = ref()
 // 列表dom

@@ -1,7 +1,7 @@
 // 配置项
 interface Props {
   valueKey: string
-  lableKey: string
+  labelKey: string
   childrenKey: string
 }
 export interface CascaderProps {
@@ -11,7 +11,7 @@ export interface CascaderProps {
   // 配置清空
   clearable?: boolean
   // input框的值
-  modelValue?: string
+  modelValue: string[] | number[] | string
   // 分隔符
   separator?: string
   // 配置input框的占位符
